@@ -24,7 +24,20 @@ int main(){
             username= "anonymous";
         }
         
-        
+        if (gethostname(hostname, sizeof(hostname)) != 0) {
+        strcpy(hostname, "unknown");
+        }
+
+        if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        strcpy(cwd, "unknown");
+        }
+
+        printf("[%s@%s:%s]$ ", username, hostname, cwd);
+        fflush(stdout);
+
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+        break; 
+        }
     }
     
 }

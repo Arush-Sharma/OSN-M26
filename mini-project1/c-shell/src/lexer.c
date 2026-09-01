@@ -20,7 +20,8 @@ int tokenize_input(const char *input, Token *tokens, int max_tokens) {
         char c = input[i];
 
         if (state == STATE_NORMAL) {
-            if (isspace(c) || c == '\0') {
+            // End of word condition: Space, Null, OR unquoted operator
+            if (isspace(c) || c == '\0' || c == '|' || c == '<' || c == '>' || c == '&' || c == ';') {
                 if (char_index > 0) {
                     current_word[char_index] = '\0';
                     tokens[token_count].type = TOKEN_WORD;
@@ -28,33 +29,41 @@ int tokenize_input(const char *input, Token *tokens, int max_tokens) {
                     token_count++;
                     char_index = 0; 
                 }
+                
+                // Handle the operator itself as a separate token
+                if (c == '|' || c == '<' || c == '&' || c == ';') {
+                    current_word[0] = c;
+                    current_word[1] = '\0';
+                    tokens[token_count].type = TOKEN_WORD; // Keeping simple for now
+                    strcpy(tokens[token_count].value, current_word);
+                    token_count++;
+                } else if (c == '>') {
+                    // Check for >>
+                    if (input[i+1] == '>') {
+                        strcpy(tokens[token_count].value, ">>");
+                        tokens[token_count].type = TOKEN_WORD;
+                        token_count++;
+                        i++; // Skip the next >
+                    } else {
+                        strcpy(tokens[token_count].value, ">");
+                        tokens[token_count].type = TOKEN_WORD;
+                        token_count++;
+                    }
+                }
             } 
-            else if (c == '\"') {
-                state = STATE_IN_DOUBLE_QUOTES;
-            } 
-            else if (c == '\'') {
-                state = STATE_IN_SINGLE_QUOTES;
-            }
-            else {
-                current_word[char_index++] = c;
-            }
+            else if (c == '\"') { state = STATE_IN_DOUBLE_QUOTES; } 
+            else if (c == '\'') { state = STATE_IN_SINGLE_QUOTES; }
+            else { current_word[char_index++] = c; }
         } 
         else if (state == STATE_IN_DOUBLE_QUOTES) {
-            if (c == '\"') {
-                state = STATE_NORMAL;
-            } else if (c != '\0') {
-                current_word[char_index++] = c;
-            }
+            if (c == '\"') { state = STATE_NORMAL; } 
+            else if (c != '\0') { current_word[char_index++] = c; }
         }
         else if (state == STATE_IN_SINGLE_QUOTES) {
-            if (c == '\'') {
-                state = STATE_NORMAL;
-            } else if (c != '\0') {
-                current_word[char_index++] = c;
-            }
+            if (c == '\'') { state = STATE_NORMAL; } 
+            else if (c != '\0') { current_word[char_index++] = c; }
         }
 
-        // Prevent overflow
         if (token_count >= max_tokens) break;
     }
     

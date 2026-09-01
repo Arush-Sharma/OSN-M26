@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include "../include/lexer.h"
+#include "../include/builtin.h"
 
 // The path resolver from earlier
 char* resolve_path(char *command) {
@@ -37,7 +38,7 @@ void execute_single_command(Token *tokens, int start_idx, int end_idx) {
     char *output_file = NULL;
     int append_output = 0;
 
-    // Parse just this slice of tokens for <, >, >>
+    // 1. Parse just this slice of tokens for <, >, >>
     for (int i = start_idx; i < end_idx; i++) {
         if (strcmp(tokens[i].value, "<") == 0 && i + 1 < end_idx) {
             input_file = tokens[i + 1].value;
@@ -61,15 +62,14 @@ void execute_single_command(Token *tokens, int start_idx, int end_idx) {
 
     if (arg_count == 0) exit(0);
 
-    char *executable = resolve_path(args[0]);
-    if (!executable) {
-        fprintf(stderr, "%s: command not found\n", args[0]);
-        exit(1);
-    }
-
+    // 2. Set up File Redirection FIRST
+    // This ensures built-ins like `pwd` can be redirected to a file
     if (input_file) {
         int fd_in = open(input_file, O_RDONLY);
-        if (fd_in < 0) { perror("input redirect failed"); exit(1); }
+        if (fd_in < 0) { 
+            fprintf(stderr, "cshell: no such file or directory\n"); 
+            exit(1); 
+        }
         dup2(fd_in, STDIN_FILENO);
         close(fd_in);
     }
@@ -80,6 +80,25 @@ void execute_single_command(Token *tokens, int start_idx, int end_idx) {
         if (fd_out < 0) { perror("output redirect failed"); exit(1); }
         dup2(fd_out, STDOUT_FILENO);
         close(fd_out);
+    }
+
+    // 3. THE THIRD FIX: Check if it's a built-in BEFORE calling resolve_path
+    Token slice_tokens[128];
+    for (int i = 0; i < arg_count; i++) {
+        slice_tokens[i].type = TOKEN_WORD;
+        strcpy(slice_tokens[i].value, args[i]);
+    }
+
+    if (execute_builtin(slice_tokens, arg_count)) {
+        // Built-in executed successfully in the child pipeline process.
+        exit(0); 
+    }
+
+    // 4. If not a built-in, it must be an external command. Resolve it and execv.
+    char *executable = resolve_path(args[0]);
+    if (!executable) {
+        fprintf(stderr, "%s: command not found\n", args[0]);
+        exit(1);
     }
 
     execv(executable, args);
